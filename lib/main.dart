@@ -1,121 +1,988 @@
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MomoWalletApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+// ============================================================
+// APP
+// ============================================================
 
-  // This widget is the root of your application.
+class MomoWalletApp extends StatelessWidget {
+  const MomoWalletApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'MoMo Wallet',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorSchemeSeed: Colors.yellow,
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const WalletScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+// ============================================================
+// TRANSACTION MODEL
+// ============================================================
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
+enum TransactionType {
+  moneyIn,
+  moneyOut,
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class WalletTransaction {
+  WalletTransaction({
+    required this.description,
+    required this.amount,
+    required this.type,
+    required this.date,
+  });
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  final String description;
+  final int amount;
+  final TransactionType type;
+  final DateTime date;
+}
+
+// ============================================================
+// WALLET SCREEN
+// ============================================================
+
+class WalletScreen extends StatefulWidget {
+  const WalletScreen({super.key});
+
+  @override
+  State<WalletScreen> createState() => _WalletScreenState();
+}
+
+class _WalletScreenState extends State<WalletScreen> {
+  static const int startingBalance = 10000;
+
+  String selectedFilter = 'All';
+
+  final List<WalletTransaction> transactions = [
+    WalletTransaction(
+      description: 'Received from Alice',
+      amount: 5000,
+      type: TransactionType.moneyIn,
+      date: DateTime(2026, 10, 25, 9, 30),
+    ),
+    WalletTransaction(
+      description: 'Sent to 0788123456',
+      amount: 2000,
+      type: TransactionType.moneyOut,
+      date: DateTime(2026, 10, 25, 12, 10),
+    ),
+    WalletTransaction(
+      description: 'Cash out',
+      amount: 1000,
+      type: TransactionType.moneyOut,
+      date: DateTime(2026, 10, 26, 14, 20),
+    ),
+  ];
+
+  // ----------------------------------------------------------
+  // CALCULATIONS
+  // ----------------------------------------------------------
+
+  int get currentBalance {
+    int balance = startingBalance;
+
+    for (final transaction in transactions) {
+      if (transaction.type == TransactionType.moneyIn) {
+        balance += transaction.amount;
+      } else {
+        balance -= transaction.amount;
+      }
+    }
+
+    return balance;
   }
+
+  int get totalIn {
+    int total = 0;
+
+    for (final transaction in transactions) {
+      if (transaction.type == TransactionType.moneyIn) {
+        total += transaction.amount;
+      }
+    }
+
+    return total;
+  }
+
+  int get totalOut {
+    int total = 0;
+
+    for (final transaction in transactions) {
+      if (transaction.type == TransactionType.moneyOut) {
+        total += transaction.amount;
+      }
+    }
+
+    return total;
+  }
+
+  int get lowestBalance {
+    int balance = startingBalance;
+    int lowest = startingBalance;
+
+    for (final transaction in transactions) {
+      if (transaction.type == TransactionType.moneyIn) {
+        balance += transaction.amount;
+      } else {
+        balance -= transaction.amount;
+      }
+
+      if (balance < lowest) {
+        lowest = balance;
+      }
+    }
+
+    return lowest;
+  }
+
+  List<WalletTransaction> get filteredTransactions {
+    final newestFirst = transactions.reversed.toList();
+
+    if (selectedFilter == 'IN') {
+      return newestFirst
+          .where((transaction) =>
+      transaction.type == TransactionType.moneyIn)
+          .toList();
+    }
+
+    if (selectedFilter == 'OUT') {
+      return newestFirst
+          .where((transaction) =>
+      transaction.type == TransactionType.moneyOut)
+          .toList();
+    }
+
+    return newestFirst;
+  }
+
+  // ----------------------------------------------------------
+  // RECEIVE
+  // ----------------------------------------------------------
+
+  Future<void> openReceiveScreen() async {
+    final result = await Navigator.push<WalletTransaction>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ReceiveMoneyScreen(),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        transactions.add(result);
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // SEND
+  // ----------------------------------------------------------
+
+  Future<void> openSendScreen() async {
+    final result = await Navigator.push<WalletTransaction>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SendMoneyScreen(
+          availableBalance: currentBalance,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        transactions.add(result);
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // CASH OUT
+  // ----------------------------------------------------------
+
+  Future<void> openCashOutScreen() async {
+    final result = await Navigator.push<WalletTransaction>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CashOutScreen(
+          availableBalance: currentBalance,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        transactions.add(result);
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // DELETE + HISTORY VALIDATION
+  // ----------------------------------------------------------
+
+  bool canDeleteTransaction(WalletTransaction transaction) {
+    final copy = List<WalletTransaction>.from(transactions);
+
+    copy.remove(transaction);
+
+    int balance = startingBalance;
+
+    for (final item in copy) {
+      if (item.type == TransactionType.moneyIn) {
+        balance += item.amount;
+      } else {
+        balance -= item.amount;
+      }
+
+      if (balance < 0) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void deleteTransaction(WalletTransaction transaction) {
+    if (!canDeleteTransaction(transaction)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cannot delete: balance would go below 0 in transaction history.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    final position = transactions.indexOf(transaction);
+
+    setState(() {
+      transactions.remove(transaction);
+    });
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${transaction.description} deleted'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            setState(() {
+              transactions.insert(position, transaction);
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------
+  // UI HELPERS
+  // ----------------------------------------------------------
+
+  String formatMoney(int amount) {
+    final text = amount.toString();
+    final buffer = StringBuffer();
+
+    for (int i = 0; i < text.length; i++) {
+      if (i > 0 && (text.length - i) % 3 == 0) {
+        buffer.write(',');
+      }
+
+      buffer.write(text[i]);
+    }
+
+    return '${buffer.toString()} RWF';
+  }
+
+  Widget statisticCard(
+      String title,
+      int amount,
+      IconData icon,
+      ) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Icon(icon),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                formatMoney(amount),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ----------------------------------------------------------
+  // BUILD
+  // ----------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final shownTransactions = filteredTransactions;
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text(
+          'MoMo Wallet',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      body: SafeArea(
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // BALANCE CARD
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.yellow.shade600,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Available Balance',
+                          style: TextStyle(
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          formatMoney(currentBalance),
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ACTION BUTTONS
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: openSendScreen,
+                          icon: const Icon(Icons.send),
+                          label: const Text('Send'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: openReceiveScreen,
+                          icon: const Icon(Icons.download),
+                          label: const Text('Receive'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: openCashOutScreen,
+                          icon: const Icon(Icons.money),
+                          label: const Text('Cash out'),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    'Statistics',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      statisticCard(
+                        'Total IN',
+                        totalIn,
+                        Icons.arrow_downward,
+                      ),
+                      statisticCard(
+                        'Total OUT',
+                        totalOut,
+                        Icons.arrow_upward,
+                      ),
+                      statisticCard(
+                        'Lowest',
+                        lowestBalance,
+                        Icons.trending_down,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  const Text(
+                    'Transactions',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All'),
+                        selected: selectedFilter == 'All',
+                        onSelected: (_) {
+                          setState(() {
+                            selectedFilter = 'All';
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Text('IN'),
+                        selected: selectedFilter == 'IN',
+                        onSelected: (_) {
+                          setState(() {
+                            selectedFilter = 'IN';
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Text('OUT'),
+                        selected: selectedFilter == 'OUT',
+                        onSelected: (_) {
+                          setState(() {
+                            selectedFilter = 'OUT';
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  if (shownTransactions.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(
+                        child: Text('No transactions to show'),
+                      ),
+                    )
+                  else
+                    ...shownTransactions.map(
+                          (transaction) {
+                        final isMoneyIn =
+                            transaction.type == TransactionType.moneyIn;
+
+                        return Card(
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              child: Icon(
+                                isMoneyIn
+                                    ? Icons.arrow_downward
+                                    : Icons.arrow_upward,
+                              ),
+                            ),
+                            title: Text(transaction.description),
+                            subtitle: Text(
+                              isMoneyIn ? 'IN' : 'OUT',
+                              style: TextStyle(
+                                color: isMoneyIn
+                                    ? Colors.green
+                                    : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${isMoneyIn ? '+' : '-'}${formatMoney(transaction.amount)}',
+                                  style: TextStyle(
+                                    color: isMoneyIn
+                                        ? Colors.green
+                                        : Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: () {
+                                    deleteTransaction(transaction);
+                                  },
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+// ============================================================
+// RECEIVE MONEY SCREEN
+// ============================================================
+
+class ReceiveMoneyScreen extends StatefulWidget {
+  const ReceiveMoneyScreen({super.key});
+
+  @override
+  State<ReceiveMoneyScreen> createState() =>
+      _ReceiveMoneyScreenState();
+}
+
+class _ReceiveMoneyScreenState
+    extends State<ReceiveMoneyScreen> {
+  final amountController = TextEditingController();
+  final descriptionController = TextEditingController();
+
+  void receiveMoney() {
+    final amountText = amountController.text.trim();
+    final description = descriptionController.text.trim();
+
+    final amount = int.tryParse(amountText);
+
+    if (amount == null) {
+      showError('Amount must be a whole number.');
+      return;
+    }
+
+    if (amount <= 0) {
+      showError('Amount must be above 0 RWF.');
+      return;
+    }
+
+    if (description.isEmpty) {
+      showError('Description cannot be empty.');
+      return;
+    }
+
+    final transaction = WalletTransaction(
+      description: description,
+      amount: amount,
+      type: TransactionType.moneyIn,
+      date: DateTime.now(),
+    );
+
+    Navigator.pop(context, transaction);
+  }
+
+  void showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Receive Money'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          TextField(
+            controller: descriptionController,
+            decoration: const InputDecoration(
+              labelText: 'Description',
+              hintText: 'Example: Received from David',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Amount',
+              suffixText: 'RWF',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: receiveMoney,
+            child: const Text('Receive Money'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// SEND MONEY SCREEN
+// ============================================================
+
+class SendMoneyScreen extends StatefulWidget {
+  const SendMoneyScreen({
+    super.key,
+    required this.availableBalance,
+  });
+
+  final int availableBalance;
+
+  @override
+  State<SendMoneyScreen> createState() =>
+      _SendMoneyScreenState();
+}
+
+class _SendMoneyScreenState extends State<SendMoneyScreen> {
+  final phoneController = TextEditingController();
+  final amountController = TextEditingController();
+
+  void sendMoney() {
+    final phone = phoneController.text.trim();
+    final amountText = amountController.text.trim();
+
+    if (!RegExp(r'^\d{10}$').hasMatch(phone)) {
+      showError('Phone number must contain exactly 10 digits.');
+      return;
+    }
+
+    if (!phone.startsWith('078') && !phone.startsWith('079')) {
+      showError('Phone number must start with 078 or 079.');
+      return;
+    }
+
+    final amount = int.tryParse(amountText);
+
+    if (amount == null) {
+      showError('Amount must be a whole number.');
+      return;
+    }
+
+    if (amount < 100) {
+      showError('Minimum send amount is 100 RWF.');
+      return;
+    }
+
+    if (amount > widget.availableBalance) {
+      showError('Insufficient balance');
+      return;
+    }
+
+    final transaction = WalletTransaction(
+      description: 'Sent to $phone',
+      amount: amount,
+      type: TransactionType.moneyOut,
+      date: DateTime.now(),
+    );
+
+    Navigator.pop(context, transaction);
+  }
+
+  void showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    amountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Send Money'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Available: ${widget.availableBalance} RWF',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: phoneController,
+            keyboardType: TextInputType.phone,
+            maxLength: 10,
+            decoration: const InputDecoration(
+              labelText: 'Phone number',
+              hintText: '0788123456',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Amount',
+              suffixText: 'RWF',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: sendMoney,
+            icon: const Icon(Icons.send),
+            label: const Text('Send Money'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CASH OUT SCREEN
+// ============================================================
+
+class CashOutScreen extends StatefulWidget {
+  const CashOutScreen({
+    super.key,
+    required this.availableBalance,
+  });
+
+  final int availableBalance;
+
+  @override
+  State<CashOutScreen> createState() =>
+      _CashOutScreenState();
+}
+
+class _CashOutScreenState extends State<CashOutScreen> {
+  final amountController = TextEditingController();
+
+  Map<int, int> notes = {};
+
+  int? get enteredAmount {
+    return int.tryParse(amountController.text.trim());
+  }
+
+  Map<int, int> calculateNotes(int amount) {
+    final denominations = [
+      5000,
+      2000,
+      1000,
+      500,
+      100,
+    ];
+
+    int remaining = amount;
+
+    final result = <int, int>{};
+
+    for (final denomination in denominations) {
+      final quantity = remaining ~/ denomination;
+
+      if (quantity > 0) {
+        result[denomination] = quantity;
+        remaining %= denomination;
+      }
+    }
+
+    return result;
+  }
+
+  void previewCashOut() {
+    final amount = enteredAmount;
+
+    if (amount == null) {
+      showError('Amount must be a whole number.');
+      return;
+    }
+
+    if (amount <= 0) {
+      showError('Amount must be above 0 RWF.');
+      return;
+    }
+
+    if (amount % 100 != 0) {
+      showError('Cash out amount must be a multiple of 100 RWF.');
+      return;
+    }
+
+    if (amount > widget.availableBalance) {
+      showError('Insufficient balance');
+      return;
+    }
+
+    setState(() {
+      notes = calculateNotes(amount);
+    });
+  }
+
+  void confirmCashOut() {
+    final amount = enteredAmount;
+
+    if (amount == null ||
+        amount <= 0 ||
+        amount % 100 != 0 ||
+        amount > widget.availableBalance) {
+      previewCashOut();
+      return;
+    }
+
+    final transaction = WalletTransaction(
+      description: 'Cash out',
+      amount: amount,
+      type: TransactionType.moneyOut,
+      date: DateTime.now(),
+    );
+
+    Navigator.pop(context, transaction);
+  }
+
+  void showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cash Out'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Available balance: ${widget.availableBalance} RWF',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Cash out amount',
+              suffixText: 'RWF',
+              border: OutlineInputBorder(),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          OutlinedButton(
+            onPressed: previewCashOut,
+            child: const Text('Show Notes'),
+          ),
+
+          const SizedBox(height: 24),
+
+          if (notes.isNotEmpty) ...[
+            const Text(
+              'Agent will give you:',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            ...notes.entries.map(
+                  (entry) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.payments),
+                  title: Text('${entry.key} RWF'),
+                  trailing: Text(
+                    '× ${entry.value}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            FilledButton(
+              onPressed: confirmCashOut,
+              child: const Text('Confirm Cash Out'),
+            ),
+          ],
+        ],
       ),
     );
   }
